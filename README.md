@@ -8,8 +8,7 @@ zod-validated knowledge base supports, and files a structured bilingual summary 
 > `.env` the browser transcribes locally, a rule-based LLM drives the whole flow, and the browser
 > speaks the reply. Add keys to upgrade individual stages; each downgrades independently.
 
-<!-- Replace with a screenshot of /demo mid-call, requirements panel filling in. -->
-![Demo screenshot placeholder](docs/images/demo-placeholder.png)
+
 
 ---
 
@@ -214,8 +213,6 @@ Step-by-step instructions are in [docs/SUBMISSION.md](docs/SUBMISSION.md#deploym
 
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — turn sequence, latency budget, why cascading rather
   than speech-to-speech, barge-in mechanics, state management, scaling.
-- **[SUBMISSION.md](docs/SUBMISSION.md)** — the submission form, how the conversation flow was
-  built, challenges, next version.
 - **[LIMITATIONS.md](docs/LIMITATIONS.md)** — blunt functional-vs-simulated table.
 - **[DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)** — three full call scripts, the mid-call drill, a video
   shot list, and a pre-interview checklist.
