@@ -4,10 +4,6 @@ A live, interruptible voice agent that calls a prospective buyer, speaks **Hindi
 English**, qualifies the lead against a deterministic slot machine, answers only what a
 zod-validated knowledge base supports, and files a structured bilingual summary when the call ends.
 
-> **Runs with zero API keys.** Every provider sits behind an interface with a mock. With an empty
-> `.env` the browser transcribes locally, a rule-based LLM drives the whole flow, and the browser
-> speaks the reply. Add keys to upgrade individual stages; each downgrades independently.
-
 
 
 ---
