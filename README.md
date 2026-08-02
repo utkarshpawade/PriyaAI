@@ -201,7 +201,6 @@ Every variable is optional. See [`.env.example`](.env.example) for where to get 
 | `apps/voice` | Render or Fly.io | **Holds WebSockets for the length of a call — serverless cannot**; `render.yaml` included |
 | Postgres | Neon | Serverless Postgres; set `DATABASE_URL` on both |
 
-Step-by-step instructions are in [docs/SUBMISSION.md](docs/SUBMISSION.md#deployment).
 
 ---
 
