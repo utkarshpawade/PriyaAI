@@ -13,6 +13,7 @@ import { findMatchingUnits, findProject, lookupTopic, primaryProject } from '../
 import type { RecordedTurn } from '../orchestrator/events.js';
 import { parseVisitDateTime } from '../nlu/datetime.js';
 import { normaliseIndianMobile } from '../nlu/phone.js';
+import { normaliseToolArgs } from './normalise-args.js';
 import {
   captureContactArgs,
   checkMatchingUnitsArgs,
@@ -80,13 +81,16 @@ export async function executeTool(
     return { ok: false, data: { error: `Unknown tool "${name}".` }, detail: `Unknown tool ${name}` };
   }
 
+  // Live models emit near-miss vocabulary; coerce before zod sees it.
+  const args = normaliseToolArgs(name, isRecord(rawArgs) ? rawArgs : {});
+
   switch (name) {
     case 'update_requirements':
-      return updateRequirements(rawArgs, context);
+      return updateRequirements(args, context);
     case 'get_project_info':
       return getProjectInfo(rawArgs, context);
     case 'check_matching_units':
-      return checkMatchingUnits(rawArgs, context);
+      return checkMatchingUnits(args, context);
     case 'schedule_site_visit':
       return scheduleSiteVisit(rawArgs, context);
     case 'capture_contact':
@@ -102,8 +106,14 @@ async function updateRequirements(rawArgs: unknown, context: ToolContext): Promi
   const parsed = updateRequirementsArgs.safeParse(rawArgs);
   if (!parsed.success) return invalidArgs('update_requirements', parsed.error.message);
 
-  const { declined, ...slotPatch } = parsed.data;
-  const { changes } = context.tracker.merge(slotPatch);
+  const { declined, phone, ...slotPatch } = parsed.data;
+  // Contact details belong to `capture_contact`, but models put them here
+  // constantly. Normalise the phone the same way rather than storing junk.
+  const normalisedPhone = phone ? normaliseIndianMobile(phone.replace(/\D/g, '')) : null;
+  const { changes } = context.tracker.merge({
+    ...slotPatch,
+    ...(normalisedPhone ? { phone: normalisedPhone } : {}),
+  });
   for (const key of declined ?? []) context.tracker.decline(key);
 
   const score = persistRequirements(context);
@@ -317,6 +327,10 @@ async function endCall(rawArgs: unknown): Promise<ToolResult> {
 
 function persistRequirements(context: ToolContext): LeadScore {
   return scoreLead(context.tracker.slots, { projects: context.config.projects });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function invalidArgs(tool: string, message: string): ToolResult {

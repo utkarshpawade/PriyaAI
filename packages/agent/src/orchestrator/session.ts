@@ -1,5 +1,4 @@
 import {
-  MAX_TURN_MS,
   VAD_ENERGY_THRESHOLD,
   completeness,
   detectLanguage,
@@ -41,8 +40,24 @@ import { SpeechQueue } from './speech-queue.js';
  * once, which is why both transports get it for free.
  */
 
-/** Rounds of tool-calling allowed before we force the model to just answer. */
-const MAX_TOOL_ROUNDS = 4;
+/**
+ * Rounds of tool-calling allowed before we force the model to just answer.
+ *
+ * Three, not four: the system prompt plus tool schemas cost ~2.8k tokens and are
+ * re-sent every round, so the cap is also a token-budget cap. Four rounds could
+ * exceed a whole minute of Groq's free-tier allowance on a single turn.
+ */
+const MAX_TOOL_ROUNDS = 3;
+
+/**
+ * Safety net for a hung provider, covering generation only — speech playback is
+ * excluded because a spoken answer legitimately runs longer than this.
+ *
+ * Comfortably above the provider retry budget on purpose. When the two were
+ * close, a rate-limited turn hit the cap mid-retry and the caller heard silence
+ * instead of the degraded-but-real answer the fallback would have produced.
+ */
+const MAX_GENERATION_MS = 20_000;
 /** Flush a partial sentence to TTS once it gets this long, to keep audio flowing. */
 const MAX_CHUNK_CHARS = 140;
 
@@ -126,7 +141,9 @@ export class AgentSession {
     this.emit = options.onEvent;
     this.now = options.now ?? (() => new Date());
     this.enableIdleTimers = options.enableIdleTimers ?? true;
-    this.idleTimeoutMs = options.idleTimeoutMs ?? 9_000;
+    // Long enough that a live provider retrying behind a rate limit does not
+    // get mistaken for a caller who has gone quiet.
+    this.idleTimeoutMs = options.idleTimeoutMs ?? 12_000;
     this.languageMode = options.languageMode ?? 'auto';
     this.currentLanguage = this.languageMode === 'auto' ? 'hi-en' : this.languageMode;
     this.tracker = new QualificationTracker(undefined, this.config.slotOrder);
@@ -374,6 +391,11 @@ export class AgentSession {
         }
       }
 
+      // The cap bounds *generation*, not the whole turn. Speaking a grounded
+      // answer at a natural pace routinely takes longer than the cap, and
+      // leaving it armed made the agent abort its own reply mid-sentence and
+      // record it as interrupted.
+      this.clearTurnCap();
       await this.speech.drain();
     } catch (error) {
       if (!abort.signal.aborted) {
@@ -635,7 +657,10 @@ export class AgentSession {
 
   /** Silence: nudge once, then close politely rather than hanging on a dead line. */
   private async handleIdle(): Promise<void> {
-    if (this.ended || this.state !== 'listening') return;
+    // `turnAbort` is non-null for the whole of an assistant turn, including a
+    // provider retry. A live model plus backoff can outlast the idle window, and
+    // nudging the caller mid-turn produces two overlapping replies.
+    if (this.ended || this.state !== 'listening' || this.turnAbort !== null) return;
 
     if (this.idlePrompted) {
       await this.end('abandoned', 'No response from the caller.');
@@ -652,12 +677,15 @@ export class AgentSession {
     this.armIdleTimer();
   }
 
-  /** Hard cap so a stuck provider can never hold a turn open forever. */
+  /**
+   * Hard cap on generation so a stuck provider can never hold a turn open
+   * forever. Cleared before speech playback begins — see `runAssistantTurn`.
+   */
   private armTurnCap(abort: AbortController): void {
     this.clearTurnCap();
     this.turnTimer = setTimeout(() => {
       if (!abort.signal.aborted) abort.abort();
-    }, MAX_TURN_MS);
+    }, MAX_GENERATION_MS);
   }
 
   private clearTurnCap(): void {

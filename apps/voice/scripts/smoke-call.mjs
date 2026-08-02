@@ -69,8 +69,14 @@ socket.on('message', (raw, isBinary) => {
       console.log(
         `  ${message.role === 'user' ? 'caller' : 'priya '} [${message.language}] ${truncate(message.text)}`,
       );
-      // The agent has finished its turn; send the next caller line.
-      if (message.role === 'assistant') sendNextTurn();
+      break;
+
+    // Pacing is driven by the agent state, not by transcripts. A live provider
+    // can emit several assistant turns for one exchange (a tool round, a retry,
+    // an idle nudge); speaking on each one would talk over the agent and
+    // desynchronise the whole conversation — exactly what a real caller does not do.
+    case 'state':
+      if (message.state === 'listening') sendNextTurn();
       break;
 
     case 'tool_result':
@@ -111,16 +117,33 @@ socket.on('close', () => {
   if (!received.ended) finish();
 });
 
+let sending = false;
+
 function sendNextTurn() {
+  if (sending || finished) return;
+
+  // Only speak once the previous line has come back as a transcript. The server
+  // emits `listening` both at the end of a turn and on a barge-in, so reacting
+  // to every one of them would talk over the agent and cascade interruptions.
+  const echoed = received.transcripts.filter((turn) => turn.role === 'user').length;
+  if (echoed < turnIndex) return;
+
+  sending = true;
+
   if (turnIndex >= TURNS.length) {
     socket.send(JSON.stringify({ type: 'end_call' }));
     // The server replies with call_ended; this guards against a lost reply.
     setTimeout(finish, 3_000);
     return;
   }
+
   const text = TURNS[turnIndex];
   turnIndex += 1;
-  setTimeout(() => socket.send(JSON.stringify({ type: 'user_text', text })), 60);
+  // A beat of think-time, like a caller who just heard the question.
+  setTimeout(() => {
+    socket.send(JSON.stringify({ type: 'user_text', text }));
+    sending = false;
+  }, 250);
 }
 
 let finished = false;

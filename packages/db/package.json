@@ -11,7 +11,11 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "generated", "prisma"],
+  "files": [
+    "dist",
+    "generated",
+    "prisma"
+  ],
   "scripts": {
     "generate": "node scripts/prisma.mjs generate",
     "migrate": "node scripts/prisma.mjs migrate deploy",
@@ -30,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "dotenv": "^16.4.7",
     "prisma": "^6.2.1",
     "rimraf": "^6.0.1",
     "tsx": "^4.19.2",

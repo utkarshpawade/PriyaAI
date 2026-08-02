@@ -8,6 +8,8 @@ import { scoreLead } from '../src/conversation/scoring.js';
 import { QualificationTracker } from '../src/conversation/state.js';
 import { findMatchingUnits, applyKbOverrides, primaryProject } from '../src/kb/index.js';
 import { buildTemplateSummary } from '../src/summary/generate.js';
+import { updateRequirementsArgs } from '../src/tools/definitions.js';
+import { normaliseToolArgs } from '../src/tools/normalise-args.js';
 import { callSummarySchema, parseSummaryJson } from '../src/summary/schema.js';
 import { renderCompiledPrompts } from '../scripts/compile-prompts.mjs';
 
@@ -87,6 +89,67 @@ describe('QualificationTracker', () => {
     tracker.merge({ intent: 'buy' });
     tracker.merge({ intent: 'lease' } as never);
     expect(tracker.slots.intent).toBe('buy');
+  });
+});
+
+describe('normaliseToolArgs', () => {
+  // Every case here is output a live model actually produced during testing.
+  it('canonicalises the configuration spelling models emit', () => {
+    expect(normaliseToolArgs('update_requirements', { configuration: '2 BHK' })).toMatchObject({
+      configuration: '2BHK',
+    });
+    expect(normaliseToolArgs('update_requirements', { configuration: '3 bhk' })).toMatchObject({
+      configuration: '3BHK',
+    });
+    expect(normaliseToolArgs('update_requirements', { configuration: '4 BHK+' })).toMatchObject({
+      configuration: '4BHK+',
+    });
+    expect(normaliseToolArgs('update_requirements', { configuration: 'penthouse' })).toMatchObject({
+      configuration: '4BHK+',
+    });
+  });
+
+  it('snake-cases enum values written as prose', () => {
+    expect(
+      normaliseToolArgs('update_requirements', { purpose: 'Self Use', timeline: '3 months' }),
+    ).toMatchObject({ purpose: 'self_use', timeline: '3_months' });
+  });
+
+  it('repairs the lakh/crore unit mistake', () => {
+    // gpt-oss-120b returned 75 for "75 lakh".
+    expect(normaliseToolArgs('update_requirements', { budgetMax: 75 })).toMatchObject({
+      budgetMax: 7_500_000,
+    });
+    expect(normaliseToolArgs('update_requirements', { budgetMax: 1.2 })).toMatchObject({
+      budgetMax: 12_000_000,
+    });
+  });
+
+  it('leaves a correct rupee figure alone', () => {
+    expect(normaliseToolArgs('update_requirements', { budgetMax: 7_500_000 })).toMatchObject({
+      budgetMax: 7_500_000,
+    });
+  });
+
+  it('parses a figure sent as a string', () => {
+    expect(normaliseToolArgs('update_requirements', { budgetMin: '₹60,00,000' })).toMatchObject({
+      budgetMin: 6_000_000,
+    });
+  });
+
+  it('does not touch tools that take no slot vocabulary', () => {
+    const args = { topic: 'price', projectSlug: 'aureva-skyline' };
+    expect(normaliseToolArgs('get_project_info', args)).toBe(args);
+  });
+
+  it('produces values the zod schema accepts', () => {
+    const normalised = normaliseToolArgs('update_requirements', {
+      configuration: '3 BHK',
+      purpose: 'Self Use',
+      timeline: '3 months',
+      budgetMax: 120,
+    });
+    expect(updateRequirementsArgs.safeParse(normalised).success).toBe(true);
   });
 });
 

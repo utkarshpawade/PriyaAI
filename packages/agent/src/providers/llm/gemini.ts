@@ -1,6 +1,6 @@
 import type { ProviderInfo } from '@rvagent/shared';
 import type { ToolDefinition } from '../../tools/definitions.js';
-import { assertOk, readSseLines, safeJsonParse } from '../http/sse.js';
+import { assertOk, fetchWithRetry, readSseLines, safeJsonParse } from '../http/sse.js';
 import type { LlmMessage, LlmProvider, LlmRequest, LlmStreamEvent } from '../types.js';
 
 /**
@@ -48,12 +48,15 @@ export class GeminiLlmProvider implements LlmProvider {
     const url = new URL(`${BASE_URL}/${model}:streamGenerateContent`);
     url.searchParams.set('alt', 'sse');
 
-    const response = await fetch(url, {
-      method: 'POST',
+    const response = await fetchWithRetry(
+      url,
+      {
+        method: 'POST',
+        headers: { 'x-goog-api-key': this.options.apiKey, 'content-type': 'application/json' },
+        body: JSON.stringify(buildBody(request)),
+      },
       signal,
-      headers: { 'x-goog-api-key': this.options.apiKey, 'content-type': 'application/json' },
-      body: JSON.stringify(buildBody(request)),
-    });
+    );
     await assertOk('Gemini', response);
     if (!response.body) {
       yield { type: 'done', finishReason: 'empty' };

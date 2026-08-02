@@ -21,15 +21,18 @@
 | Web | Next.js 15 (App Router), React 19, Tailwind v4 | Server components for the dashboard, one client island for the demo |
 | Database | Postgres 16 + Prisma 6 | Relational data (lead → call → turn) with typed access |
 | Validation | zod | Single source of truth for slots, the WS protocol, the KB and summaries |
-| Testing | Vitest, Playwright, custom conversation eval | 108 unit tests, 16 scripted conversations, one browser smoke test |
+| Testing | Vitest, Playwright, custom conversation eval | 115 unit tests, 16 scripted conversations, one browser smoke test |
 | CI | GitHub Actions | typecheck · lint · test · eval · build, plus a Playwright job |
 
 ## AI model used
 
-- **Default LLM: Google Gemini 2.5 Flash** (`gemini-2.5-flash`) via the Generative Language REST API
-  with streaming and function calling. Chosen for latency, cost, and noticeably better Hinglish than
-  alternatives at the same price point.
-- **Alternatives implemented:** OpenAI `gpt-4o-mini`, Anthropic `claude-haiku-4-5`.
+- **Default LLM: Groq** (`openai/gpt-oss-20b`) via their OpenAI-compatible endpoint, with streaming
+  and function calling. Chosen for inference speed: token throughput on their LPUs is high enough
+  that first-token time stops being a meaningful part of the latency budget, which matters more in a
+  live phone call than model size does. Model verified against the live `/models` endpoint — the
+  Llama models were deprecated in June 2026 in favour of the `gpt-oss` family.
+- **Alternatives implemented:** Google Gemini 2.5 Flash, OpenAI `gpt-4o-mini`, Anthropic
+  `claude-haiku-4-5`.
 - **Offline: `MockLLM`** — a deterministic rule-based responder driven by the same slot schema and
   the same six tools. It is not a stub; it runs the full orchestrator and is what `pnpm eval` tests.
 
@@ -119,6 +122,25 @@ instantly. Emitting a tone of the correct duration at real speaking pace means b
 buffer and the "agent is speaking" state all behave the way they will with a real voice — the timing
 in a mock-mode demo is real, only the words are canned.
 
+**Live models do not respect your enums, and free tiers rate-limit hard.** Wiring up real providers
+surfaced four failures that mocks never could, each fixed structurally rather than by prompt-nagging:
+
+- Groq returned `configuration: "2 BHK"` where the enum is `"2BHK"`, and `budgetMax: 75` for "75
+  lakh". Both failed zod, and a rejected tool call means a silently dropped slot — the most expensive
+  failure in this product. There is now a coercion layer that fixes formatting and obvious unit
+  errors before validation, with the real observed outputs as test cases.
+- The model passed a project *name* where the tool wanted a slug, turning a valid lookup into "I do
+  not have that confirmed". Lookup now accepts either.
+- Groq's free tier allows 8000 tokens per minute; one turn costs ~2.8k, so a normal conversation
+  429s within three turns. Fixed on three fronts: the system prompt was cut from ~2.2k to ~1.8k
+  tokens, requests retry once honouring the provider's own `retry-after` hint, and a
+  `ResilientLlmProvider` falls back to the offline responder when the primary still fails. The caller
+  gets a less fluent answer instead of silence.
+- Most instructive: the retry initially made things *worse*. The orchestrator's turn cap was bounding
+  the whole turn including speech playback, so backoff ate the budget and turns aborted at exactly
+  12000 ms with nothing spoken — visible as a column of identical `total=12000 INTERRUPTED` rows in
+  the database. The cap now bounds generation only, and the retry budget is sized to fit inside it.
+
 **Windows build environment.** Next's webpack pipeline globs upward out of the repository and hits
 protected profile junctions (`C:\Users\<name>\Cookies`), failing the build with an opaque `EPERM`.
 Isolated by instrumenting the bundled glob in the build workers; resolved by building with Turbopack,
@@ -202,7 +224,8 @@ At time of writing, on a clean checkout:
 |---|---|
 | `pnpm typecheck` | pass |
 | `pnpm lint` | pass |
-| `pnpm test` | 108 tests pass |
+| `pnpm test` | 115 tests pass |
+| Live call: Deepgram + Groq + Sarvam against Neon | 11 / 11 smoke checks pass |
 | `pnpm eval` | 16 / 16 scenarios pass |
 | `pnpm build` | pass |
 | Prisma migration against Postgres 16 | applied |

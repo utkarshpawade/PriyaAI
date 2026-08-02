@@ -41,8 +41,27 @@ export function applyKbOverrides(overrides: KbOverrides | null | undefined): Pro
   });
 }
 
-export function findProject(projects: readonly Project[], slug: string): Project | undefined {
-  return projects.find((project) => project.slug === slug);
+/**
+ * Resolves a project by slug or by name.
+ *
+ * Live models pass whatever identifier they saw in the prompt — "Aureva
+ * Skyline" as often as "aureva-skyline" — and rejecting the human-readable form
+ * turned a valid lookup into "I do not have that confirmed", which is a much
+ * worse answer than simply accepting both.
+ */
+export function findProject(projects: readonly Project[], identifier: string): Project | undefined {
+  const needle = identifier.trim().toLowerCase();
+  if (needle.length === 0) return undefined;
+
+  return (
+    projects.find((project) => project.slug === needle) ??
+    projects.find((project) => project.name.toLowerCase() === needle) ??
+    projects.find((project) => slugify(project.name) === slugify(needle))
+  );
+}
+
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 export function primaryProject(projects: readonly Project[]): Project {

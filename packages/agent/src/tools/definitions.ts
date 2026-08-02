@@ -66,6 +66,14 @@ export const updateRequirementsArgs = z.object({
   preferredCallbackTime: z.string().max(120).optional(),
   objections: z.array(z.string().max(400)).max(10).optional(),
   declined: z.array(z.enum(DECLINABLE)).max(10).optional(),
+  /**
+   * Accepted but not advertised in the JSON schema. Models routinely put contact
+   * details here instead of calling `capture_contact`; rejecting the call would
+   * drop the name and number entirely, so the executor forwards them on.
+   */
+  name: z.string().max(120).optional(),
+  phone: z.string().max(24).optional(),
+  email: z.string().max(200).optional(),
 });
 export type UpdateRequirementsArgs = z.infer<typeof updateRequirementsArgs>;
 
@@ -109,7 +117,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'update_requirements',
     description:
-      "Record what the caller wants. Call this the moment they state or change anything: configuration, budget, location, timeline, financing, purpose, or an objection. Persists immediately and updates the live dashboard. Use `declined` for slots the caller refuses to answer so they are never asked again.",
+      'Record what the caller wants, the moment they say or change it. Use `declined` for slots they refuse.',
     parameters: {
       type: 'object',
       properties: {
@@ -144,7 +152,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'get_project_info',
     description:
-      'Look up a verified fact about a project. Call this before stating any price, date, distance, amenity or approval. If the answer is not here, tell the caller you will check rather than guessing.',
+      'Look up a verified project fact. Call before stating any price, date, distance, amenity or approval.',
     parameters: {
       type: 'object',
       properties: {
@@ -165,7 +173,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'check_matching_units',
     description:
-      'Search live inventory for units matching a configuration and budget. If nothing matches, it returns the nearest alternatives — you must tell the caller plainly that those are above their stated budget.',
+      'Search inventory. If nothing matches it returns nearest options, which you must call out as above budget.',
     parameters: {
       type: 'object',
       properties: {
@@ -181,7 +189,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'schedule_site_visit',
     description:
-      'Book a site visit once the caller agrees to one. Pass their own words for the date, e.g. "kal shaam" or "this Sunday".',
+      'Book a site visit. Pass the caller own words for the date, e.g. "kal shaam".',
     parameters: {
       type: 'object',
       properties: {
@@ -199,7 +207,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'capture_contact',
     description:
-      'Store the caller name, phone or email as soon as you have it. Indian mobile numbers are validated before storing.',
+      'Store the caller name, phone or email. Indian mobile numbers are validated.',
     parameters: {
       type: 'object',
       properties: {
@@ -214,7 +222,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: 'end_call',
     description:
-      'End the call. Say your closing line first, then call this. Use `not_interested` immediately if the caller opts out.',
+      'End the call. Say your closing line first. Use `not_interested` immediately on opt-out.',
     parameters: {
       type: 'object',
       properties: {

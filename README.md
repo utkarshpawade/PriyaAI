@@ -65,7 +65,7 @@ flowchart TB
     end
 
     CORE --> DB[("Postgres via Prisma<br/>Lead · Call · Turn · Summary<br/>SiteVisit · FollowUp · AgentConfig")]
-    CORE --> P["Provider adapters<br/>Deepgram · Sarvam · ElevenLabs<br/>Gemini · OpenAI · Anthropic<br/>+ a mock for each"]
+    CORE --> P["Provider adapters<br/>Deepgram · Sarvam · ElevenLabs<br/>Groq · Gemini · OpenAI · Anthropic<br/>+ a mock for each"]
 
     DB --> WEB["Next.js 15<br/>/ · /demo · /leads · /leads/[id] · /admin"]
     WEB -. "hot-reload agent config" .-> VS
@@ -121,6 +121,7 @@ Full detail, including the latency budget and scaling notes: **[docs/ARCHITECTUR
 | **Cannot invent facts** | All property answers come from a zod-validated KB through tool calls. An output filter rewrites or blocks guarantees and forces "indicative" on prices, "expected" on timelines. |
 | **Deterministic flow** | The LLM phrases; a slot state machine decides what still needs asking. Never re-asks a filled slot, honours refusals, accepts mid-call revisions, and gives up on a slot after two ignored attempts. |
 | **Two transports** | Browser WebSocket and Twilio Media Streams over the same core. |
+| **Degrades instead of dying** | Live LLM calls retry on rate limits, then fall back to the offline responder mid-call. Tool arguments are coerced before validation, so a model that says `"2 BHK"` or `75` for 75 lakh does not drop the slot. |
 | **Every call is a record** | Leads, per-turn transcripts with latency breakdowns, tool traces, bilingual summaries, versioned agent config. |
 | **Live reconfiguration** | `/admin` writes a new `AgentConfig` version and pushes a reload — the next call uses it, no redeploy. |
 
@@ -149,12 +150,13 @@ Every variable is optional. See [`.env.example`](.env.example) for where to get 
 |---|---|---|
 | `DATABASE_URL` | Postgres connection | Falls back to the docker-compose URL; if unreachable the demo runs without persisting |
 | `STT_PROVIDER` | `deepgram` \| `sarvam` \| `browser` \| `mock` | Best available key, else browser Web Speech |
-| `LLM_PROVIDER` | `gemini` \| `openai` \| `anthropic` \| `mock` | Best available key, else `MockLLM` |
+| `LLM_PROVIDER` | `groq` \| `gemini` \| `openai` \| `anthropic` \| `mock` | Best available key, else `MockLLM` |
 | `TTS_PROVIDER` | `sarvam` \| `elevenlabs` \| `browser` \| `mock` | Best available key, else browser speech synthesis |
 | `DEEPGRAM_API_KEY` | Streaming STT, `language=multi` for Hinglish | STT downgrades |
 | `SARVAM_API_KEY` | Saarika STT **and** Bulbul TTS | Both downgrade |
 | `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID` | Flash v2.5 TTS | TTS downgrades |
-| `GEMINI_API_KEY` | Default LLM | `MockLLM` |
+| `GROQ_API_KEY` | Default LLM (OpenAI-compatible, very fast) | falls back to Gemini/OpenAI/Anthropic, then `MockLLM` |
+| `GEMINI_API_KEY` | Alternative LLM | next provider in order |
 | `TWILIO_ACCOUNT_SID` / `_AUTH_TOKEN` / `_PHONE_NUMBER` | Phone calls | Phone path returns a clear 503 |
 | `PUBLIC_BASE_URL` | Builds the `wss://` stream URL for TwiML | Inferred from the request host |
 | `ALLOWED_ORIGINS` | CORS allowlist for the browser socket | `http://localhost:3000` |
@@ -170,7 +172,7 @@ Every variable is optional. See [`.env.example`](.env.example) for where to get 
 | `pnpm build` | Build every package and app |
 | `pnpm typecheck` | `tsc --noEmit` across the workspace |
 | `pnpm lint` | ESLint over the monorepo |
-| `pnpm test` | Vitest units (108 tests) |
+| `pnpm test` | Vitest units (115 tests) |
 | `pnpm eval` | **16 scripted conversations through the real orchestrator, offline** |
 | `pnpm e2e` | Playwright smoke test of the demo and dashboard |
 | `pnpm db:up` / `db:down` | Start/stop Postgres in Docker |

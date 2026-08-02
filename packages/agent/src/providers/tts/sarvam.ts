@@ -7,7 +7,7 @@ import {
   type Language,
   type ProviderInfo,
 } from '@rvagent/shared';
-import { assertOk } from '../http/sse.js';
+import { assertOk, fetchWithRetry } from '../http/sse.js';
 import type { TtsProvider } from '../types.js';
 
 /**
@@ -63,9 +63,8 @@ export class SarvamTtsProvider implements TtsProvider {
     language: Language,
     signal: AbortSignal,
   ): AsyncIterable<Int16Array> {
-    const response = await fetch(this.options.endpoint ?? DEFAULT_ENDPOINT, {
+    const response = await fetchWithRetry(this.options.endpoint ?? DEFAULT_ENDPOINT, {
       method: 'POST',
-      signal,
       headers: {
         'api-subscription-key': this.options.apiKey,
         'content-type': 'application/json',
@@ -79,7 +78,7 @@ export class SarvamTtsProvider implements TtsProvider {
         pace: this.options.pace ?? 1.0,
         enable_preprocessing: true,
       }),
-    });
+    }, signal);
     await assertOk('Sarvam TTS', response);
 
     const payload = (await response.json()) as { audios?: string[] };

@@ -1,5 +1,5 @@
 import type { ProviderInfo } from '@rvagent/shared';
-import { assertOk, readSseLines, safeJsonParse } from '../http/sse.js';
+import { assertOk, fetchWithRetry, readSseLines, safeJsonParse } from '../http/sse.js';
 import type { LlmMessage, LlmProvider, LlmRequest, LlmStreamEvent } from '../types.js';
 
 /**
@@ -52,9 +52,8 @@ export class AnthropicLlmProvider implements LlmProvider {
   }
 
   async *stream(request: LlmRequest, signal: AbortSignal): AsyncIterable<LlmStreamEvent> {
-    const response = await fetch(`${this.options.baseUrl ?? DEFAULT_BASE_URL}/messages`, {
+    const response = await fetchWithRetry(`${this.options.baseUrl ?? DEFAULT_BASE_URL}/messages`, {
       method: 'POST',
-      signal,
       headers: {
         'x-api-key': this.options.apiKey,
         'anthropic-version': API_VERSION,
@@ -78,7 +77,7 @@ export class AnthropicLlmProvider implements LlmProvider {
             }
           : {}),
       }),
-    });
+    }, signal);
     await assertOk('Anthropic', response);
     if (!response.body) {
       yield { type: 'done', finishReason: 'empty' };

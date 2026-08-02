@@ -1,5 +1,5 @@
 import { AGENT_SAMPLE_RATE, bufferToPcm16, type Language, type ProviderInfo } from '@rvagent/shared';
-import { assertOk, readBytes } from '../http/sse.js';
+import { assertOk, fetchWithRetry, readBytes } from '../http/sse.js';
 import type { TtsProvider } from '../types.js';
 
 /**
@@ -50,9 +50,8 @@ export class ElevenLabsTtsProvider implements TtsProvider {
       String(this.options.optimizeStreamingLatency ?? 3),
     );
 
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, {
       method: 'POST',
-      signal,
       headers: { 'xi-api-key': this.options.apiKey, 'content-type': 'application/json' },
       body: JSON.stringify({
         text,
@@ -67,7 +66,7 @@ export class ElevenLabsTtsProvider implements TtsProvider {
         },
         apply_text_normalization: 'auto',
       }),
-    });
+    }, signal);
     await assertOk('ElevenLabs', response);
     if (!response.body) return;
 

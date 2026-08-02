@@ -1,7 +1,9 @@
 import type { ProviderSet } from '@rvagent/shared';
 import { AnthropicLlmProvider } from './llm/anthropic.js';
 import { GeminiLlmProvider } from './llm/gemini.js';
+import { GroqLlmProvider } from './llm/groq.js';
 import { OpenAiLlmProvider } from './llm/openai.js';
+import { ResilientLlmProvider } from './llm/resilient.js';
 import { MockLlmProvider } from './mock/llm.js';
 import { MockSttProvider } from './mock/stt.js';
 import { BrowserSpeechTtsProvider, MockTtsProvider } from './mock/tts.js';
@@ -10,7 +12,7 @@ import { DeepgramSttProvider } from './stt/deepgram.js';
 import { SarvamSttProvider } from './stt/sarvam.js';
 import { ElevenLabsTtsProvider } from './tts/elevenlabs.js';
 import { SarvamTtsProvider } from './tts/sarvam.js';
-import { describeProviders, type ProviderSetInstance } from './types.js';
+import { describeProviders, type LlmProvider, type ProviderSetInstance } from './types.js';
 
 /**
  * Provider selection.
@@ -22,7 +24,7 @@ import { describeProviders, type ProviderSetInstance } from './types.js';
  */
 
 export type SttProviderName = 'deepgram' | 'sarvam' | 'browser' | 'mock';
-export type LlmProviderName = 'gemini' | 'openai' | 'anthropic' | 'mock';
+export type LlmProviderName = 'groq' | 'gemini' | 'openai' | 'anthropic' | 'mock';
 export type TtsProviderName = 'sarvam' | 'elevenlabs' | 'browser' | 'mock';
 
 export interface ProviderEnv {
@@ -38,6 +40,8 @@ export interface ProviderEnv {
   ELEVENLABS_API_KEY?: string;
   ELEVENLABS_VOICE_ID?: string;
   ELEVENLABS_MODEL_ID?: string;
+  GROQ_API_KEY?: string;
+  GROQ_MODEL?: string;
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
   OPENAI_API_KEY?: string;
@@ -100,9 +104,29 @@ function createStt(env: ProviderEnv, notices: string[]) {
 }
 
 function createLlm(env: ProviderEnv, notices: string[]) {
+  const live = createLiveLlm(env, notices);
+  if (!live) return new MockLlmProvider();
+
+  // Any live model gets the offline responder as a safety net. Rate limits on
+  // free tiers are routine, and a degraded reply beats silence mid-call.
+  return new ResilientLlmProvider(live, new MockLlmProvider(), (error) => {
+    console.warn(`[llm] ${live.info.name} failed, falling back to MockLLM: ${error.message}`);
+  });
+}
+
+function createLiveLlm(env: ProviderEnv, notices: string[]): LlmProvider | null {
   const requested = normalise(env.LLM_PROVIDER) as LlmProviderName | undefined;
 
-  if (requested === 'mock') return new MockLlmProvider();
+  if (requested === 'mock') return null;
+
+  // Groq first: an OpenAI-compatible endpoint on LPU hardware, fast enough that
+  // first-token time stops mattering in the latency budget.
+  if (requested === 'groq' || (!requested && env.GROQ_API_KEY)) {
+    if (env.GROQ_API_KEY) {
+      return new GroqLlmProvider({ apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL });
+    }
+    notices.push('LLM_PROVIDER=groq but GROQ_API_KEY is missing.');
+  }
 
   if (requested === 'gemini' || (!requested && env.GEMINI_API_KEY)) {
     if (env.GEMINI_API_KEY) {
@@ -126,7 +150,7 @@ function createLlm(env: ProviderEnv, notices: string[]) {
   }
 
   notices.push('LLM falling back to MockLLM (no LLM key configured) — the full flow still runs.');
-  return new MockLlmProvider();
+  return null;
 }
 
 function createTts(env: ProviderEnv, notices: string[], options: CreateProvidersOptions) {

@@ -31,6 +31,9 @@ export { SarvamSttProvider } from './providers/stt/sarvam.js';
 export { SarvamTtsProvider } from './providers/tts/sarvam.js';
 export { ElevenLabsTtsProvider } from './providers/tts/elevenlabs.js';
 export { GeminiLlmProvider } from './providers/llm/gemini.js';
+export { GroqLlmProvider } from './providers/llm/groq.js';
+export { OpenAiCompatibleProvider } from './providers/llm/openai-compatible.js';
+export { ResilientLlmProvider } from './providers/llm/resilient.js';
 export { OpenAiLlmProvider } from './providers/llm/openai.js';
 export { AnthropicLlmProvider } from './providers/llm/anthropic.js';
 

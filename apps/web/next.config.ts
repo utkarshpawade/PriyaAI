@@ -1,8 +1,19 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config as loadDotenv } from 'dotenv';
 import type { NextConfig } from 'next';
 
 const appDir = dirname(fileURLToPath(import.meta.url));
+
+/*
+ * Next only reads a `.env` sitting next to the app, but this is a monorepo with
+ * one `.env` at the root that also configures the voice server. Loading it here
+ * — before the config object is evaluated, and therefore before compilation —
+ * means `DATABASE_URL` and the `NEXT_PUBLIC_*` values resolve identically for
+ * `next dev`, `next build` and `next start`. `override: false` keeps a real
+ * environment variable (Vercel, Docker) winning over the file.
+ */
+loadDotenv({ path: join(appDir, '..', '..', '.env'), override: false });
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,

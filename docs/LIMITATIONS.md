@@ -25,7 +25,7 @@ one rendered on the landing page, so a reviewer sees it before they see the demo
 | Capability | With a key | Without |
 |---|---|---|
 | Speech to text | Deepgram `nova-3` (`language=multi` for Hinglish) or Sarvam Saarika | Browser Web Speech API, or `MockSTT` replaying a script against a real VAD |
-| Language model | Gemini 2.5 Flash (default), GPT-4o-mini, or Claude Haiku 4.5 | `MockLLM` — deterministic, rule-based, drives the *same* orchestrator and tools |
+| Language model | Groq `openai/gpt-oss-20b` (default), Gemini 2.5 Flash, GPT-4o-mini, or Claude Haiku 4.5 | `MockLLM` — deterministic, rule-based, drives the *same* orchestrator and tools |
 | Text to speech | Sarvam Bulbul v2 or ElevenLabs Flash v2.5 | Browser `speechSynthesis`, or `MockTTS` emitting a tone of the correct duration at real speaking pace |
 
 The active provider is logged on boot, returned by `/healthz`, and shown as a badge in the demo
@@ -44,6 +44,13 @@ header. Nothing is ever silently mocked.
 | **Authentication** | The dashboard and `/admin` are unauthenticated. | SSO for the sales team and role separation between agent config and lead data. |
 
 ## Known rough edges
+
+- **Groq's free tier is 8000 tokens per minute, and one turn costs ~2.8k.** A normal conversation
+  rate-limits within three turns. The agent handles this — one retry honouring the provider's
+  `retry-after`, then a fallback to the offline responder — but the practical effect is that some
+  turns in a long demo are answered by the rule-based responder rather than the model. The boot log
+  and the server log both say when this happens. A paid tier removes it entirely; so does
+  `LLM_PROVIDER=gemini` with a Gemini key, whose free tier is far more generous per minute.
 
 - **`MockTTS` runs at real speaking pace on purpose** so barge-in timing and the jitter buffer behave
   realistically. It means a mock-mode demo takes as long as a real conversation.
