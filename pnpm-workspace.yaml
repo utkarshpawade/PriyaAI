@@ -1,0 +1,13 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm >= 11 requires postinstall scripts to be approved explicitly.
+# All five are first-party build steps of dependencies we chose deliberately:
+# Prisma downloads its query engine, esbuild and sharp fetch platform binaries.
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  sharp: true

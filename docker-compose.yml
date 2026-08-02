@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rvagent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rvagent
+      POSTGRES_PASSWORD: rvagent
+      POSTGRES_DB: rvagent
+    ports:
+      - "5433:5432"
+    volumes:
+      - rvagent-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rvagent -d rvagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Optional: the two application containers. Local development normally runs
+  # `pnpm dev` on the host and only uses the `postgres` service above, so both
+  # app services sit behind the `apps` profile: `docker compose --profile apps up`.
+  voice:
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: apps/voice/Dockerfile
+    container_name: rvagent-voice
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://rvagent:rvagent@postgres:5432/rvagent?schema=public
+      PORT: "8787"
+      NODE_ENV: production
+      STT_PROVIDER: ${STT_PROVIDER:-mock}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      TTS_PROVIDER: ${TTS_PROVIDER:-mock}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
+      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8787:8787"
+
+  web:
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: rvagent-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://rvagent:rvagent@postgres:5432/rvagent?schema=public
+      NODE_ENV: production
+      PORT: "3000"
+      NEXT_PUBLIC_VOICE_WS_URL: ws://localhost:8787
+      NEXT_PUBLIC_VOICE_HTTP_URL: http://localhost:8787
+      VOICE_SERVER_URL: http://voice:8787
+    ports:
+      - "3000:3000"
+
+volumes:
+  rvagent-pgdata:

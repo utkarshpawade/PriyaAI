@@ -1,0 +1,257 @@
+// Prisma schema for the real-estate voice agent.
+//
+// Enum policy: values that are already valid identifiers (call outcome, lead
+// status, ...) are Postgres enums so the database enforces them. Slot
+// vocabularies that contain characters Postgres enums cannot express without
+// mapping ("hi-en", "4BHK+", "3_months") are stored as text and validated by the
+// zod schemas in @rvagent/shared, which stay the single source of truth.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CallTransport {
+  web
+  phone
+}
+
+enum CallDirection {
+  inbound
+  outbound
+}
+
+enum CallOutcome {
+  in_progress
+  qualified
+  not_interested
+  callback_requested
+  wrong_number
+  abandoned
+}
+
+enum LeadStatus {
+  new_lead
+  qualified
+  unqualified
+  callback_scheduled
+  site_visit_scheduled
+  do_not_call
+  closed_lost
+}
+
+enum LeadTemperature {
+  hot
+  warm
+  cold
+}
+
+enum TurnRole {
+  user
+  assistant
+  system
+}
+
+enum SiteVisitStatus {
+  requested
+  confirmed
+  cancelled
+  completed
+}
+
+/// A prospective buyer. One lead can have many calls.
+model Lead {
+  id    String  @id @default(cuid())
+  name  String?
+  phone String? @unique
+  email String?
+
+  // Qualification slots — mirrors qualificationSlotsSchema in @rvagent/shared.
+  intent                String?
+  location              String?
+  propertyType          String?
+  configuration         String?
+  budgetMin             Int?
+  budgetMax             Int?
+  purpose               String?
+  timeline              String?
+  financing             String?
+  preferredCallbackTime String?
+  objections            String[] @default([])
+
+  status      LeadStatus       @default(new_lead)
+  score       Int              @default(0)
+  temperature LeadTemperature?
+  source      String           @default("voice_agent")
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  calls      Call[]
+  siteVisits SiteVisit[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+/// One conversation, over either transport.
+model Call {
+  id String @id @default(cuid())
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  transport CallTransport @default(web)
+  direction CallDirection @default(inbound)
+
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  durationSec Int?
+
+  /// What the UI forced: hi | hi-en | en | auto
+  languageMode String @default("auto")
+  /// Dominant detected language across user turns.
+  primaryLanguage String?
+  /// Per-language turn counts, e.g. { "hi-en": 6, "en": 2 }.
+  languageMix Json?
+
+  outcome      CallOutcome @default(in_progress)
+  recordingUrl String?
+  /// Snapshot of which STT/LLM/TTS adapters served this call, live or mock.
+  providerSet Json
+
+  agentConfigId Int?
+  agentConfig   AgentConfig? @relation(fields: [agentConfigId], references: [id], onDelete: SetNull)
+
+  fromNumber    String?
+  toNumber      String?
+  twilioCallSid String? @unique
+
+  turns      Turn[]
+  summary    Summary?
+  siteVisits SiteVisit[]
+  followUps  FollowUp[]
+
+  createdAt DateTime @default(now())
+
+  @@index([startedAt])
+  @@index([outcome])
+}
+
+/// A single utterance, with the latency breakdown that produced it.
+model Turn {
+  id     String @id @default(cuid())
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  index    Int
+  role     TurnRole
+  text     String
+  /// hi | hi-en | en
+  language String
+  /// True when the caller barged in and cut this assistant turn short.
+  interrupted Boolean @default(false)
+  audioUrl    String?
+  /// [{ name, args, result }] for the tool trace in the dashboard.
+  toolCalls Json?
+
+  sttMs           Int?
+  llmFirstTokenMs Int?
+  ttsFirstByteMs  Int?
+  totalMs         Int?
+
+  createdAt DateTime @default(now())
+
+  @@unique([callId, index])
+  @@index([callId])
+}
+
+/// Post-call analysis. One per call.
+model Summary {
+  id     String @id @default(cuid())
+  callId String @unique
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  /// The zod-validated CallSummary object.
+  structured Json
+  textEn     String
+  textHi     String
+
+  qualificationScore    Int
+  leadTemperature       LeadTemperature
+  sentiment             String
+  nextAction            String
+  suggestedFollowUpDate DateTime?
+  /// "llm:gemini-2.5-flash" or "template" when the deterministic fallback ran.
+  generatedBy String
+
+  createdAt DateTime @default(now())
+}
+
+/// Simulated booking — no real calendar or CRM is contacted.
+model SiteVisit {
+  id String @id @default(cuid())
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  callId String?
+  call   Call?   @relation(fields: [callId], references: [id], onDelete: SetNull)
+
+  scheduledFor DateTime
+  /// The caller's own words, e.g. "kal shaam" — kept for auditing the parser.
+  dateHint    String
+  projectSlug String
+  status      SiteVisitStatus @default(requested)
+  notes       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([scheduledFor])
+}
+
+/// Something the agent could not answer from the knowledge base.
+model FollowUp {
+  id     String @id @default(cuid())
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  question String
+  reason   String  @default("outside_knowledge_base")
+  resolved Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([callId])
+}
+
+/// Versioned agent behaviour. /admin writes a new row instead of mutating one,
+/// so every live edit during a demo stays auditable and revertible.
+model AgentConfig {
+  id    Int    @id @default(autoincrement())
+  label String
+
+  greetingHinglish String
+  greetingHindi    String
+  greetingEnglish  String
+  persona          String
+  /// Extra guardrail sentences appended to the system prompt.
+  guardrails String[] @default([])
+  /// Question order, e.g. ["intent","configuration","location","budget",...].
+  slotOrder String[] @default([])
+  /// Sparse overrides merged over the compiled knowledge base.
+  kbOverrides Json?
+
+  isActive  Boolean  @default(false)
+  createdBy String   @default("admin")
+  createdAt DateTime @default(now())
+
+  calls Call[]
+
+  @@index([isActive])
+}

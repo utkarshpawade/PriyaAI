@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm --filter @rvagent/shared run build && pnpm --filter @rvagent/db run build && pnpm --filter @rvagent/agent run build && pnpm --filter @rvagent/web run build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs",
+  "regions": ["bom1"],
+  "env": {
+    "NEXT_TELEMETRY_DISABLED": "1"
+  }
+}

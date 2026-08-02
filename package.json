@@ -1,0 +1,45 @@
+{
+  "name": "realestate-voice-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live AI voice-calling agent for the Indian real estate market (Hindi / Hinglish / English)",
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,yml,yaml,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,yml,yaml,css}\"",
+    "eval": "pnpm --filter @rvagent/agent run eval",
+    "e2e": "pnpm --filter @rvagent/web run e2e",
+    "db:generate": "pnpm --filter @rvagent/db run generate",
+    "db:migrate": "pnpm --filter @rvagent/db run migrate",
+    "db:push": "pnpm --filter @rvagent/db run push",
+    "db:seed": "pnpm --filter @rvagent/db run seed",
+    "db:studio": "pnpm --filter @rvagent/db run studio",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "setup": "pnpm install && pnpm db:up && pnpm db:generate && pnpm db:migrate && pnpm db:seed && pnpm build",
+    "clean": "turbo run clean && rimraf node_modules"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "rimraf": "^6.0.1",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.19.1",
+    "vitest": "^2.1.8"
+  }
+}

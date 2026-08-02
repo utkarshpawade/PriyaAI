@@ -1,0 +1,74 @@
+# Render blueprint for the realtime voice server.
+#
+# The Next.js app goes to Vercel (see vercel.json); only this service needs a
+# always-on container, because it holds a WebSocket open for the length of a
+# call and Vercel's serverless functions cannot.
+#
+# Deploy:
+#   1. Push this repository to GitHub.
+#   2. Render → New → Blueprint → select the repo.
+#   3. Fill in the sync:false secrets in the dashboard (all are optional; with
+#      none set the service runs in mock mode and still answers calls).
+
+services:
+  - type: web
+    name: rvagent-voice
+    runtime: docker
+    plan: starter # Free tier sleeps, which drops live calls — starter or above.
+    region: singapore # Closest Render region to Indian callers.
+    dockerfilePath: ./apps/voice/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8787
+      - key: LOG_LEVEL
+        value: info
+
+      # Point this at your Neon connection string.
+      - key: DATABASE_URL
+        sync: false
+
+      # Must include the deployed Vercel origin, or the browser demo is blocked.
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Used to build the wss:// URL inside the TwiML response.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # Shared secret so only the web app can hot-reload agent config.
+      - key: INTERNAL_API_TOKEN
+        generateValue: true
+
+      # Provider selection — leave blank to run on mocks.
+      - key: STT_PROVIDER
+        sync: false
+      - key: LLM_PROVIDER
+        sync: false
+      - key: TTS_PROVIDER
+        sync: false
+
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false

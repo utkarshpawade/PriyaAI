@@ -1,0 +1,38 @@
+{
+  "name": "@rvagent/db",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "generated", "prisma"],
+  "scripts": {
+    "generate": "node scripts/prisma.mjs generate",
+    "migrate": "node scripts/prisma.mjs migrate deploy",
+    "migrate:dev": "node scripts/prisma.mjs migrate dev",
+    "push": "node scripts/prisma.mjs db push",
+    "studio": "node scripts/prisma.mjs studio",
+    "seed": "node scripts/seed.mjs",
+    "build": "node scripts/prisma.mjs generate && tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist .turbo generated"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "prisma": "^6.2.1",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
