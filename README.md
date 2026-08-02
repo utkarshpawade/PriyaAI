@@ -217,10 +217,7 @@ Step-by-step instructions are in [docs/SUBMISSION.md](docs/SUBMISSION.md#deploym
 - **[LIMITATIONS.md](docs/LIMITATIONS.md)** — blunt functional-vs-simulated table.
 - **[DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)** — three full call scripts, the mid-call drill, a video
   shot list, and a pre-interview checklist.
-- **[INTERVIEW_NOTES.md](docs/INTERVIEW_NOTES.md)** — likely questions with crisp answers.
 
 ---
 
-**Aureva Skyline** and **Meridian Verde** are fictional projects invented for this assignment. The
-RERA numbers are placeholders in MahaRERA format and are not real registrations. No unit can be
-booked.
+
